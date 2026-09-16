@@ -69,6 +69,33 @@ export function latLonToUTM(lat: number, lon: number, forceZone?: number): UTMRe
   };
 }
 
+export function utmToLatLon(easting: number, northing: number, zoneNumber: number, hemisphere: 'N' | 'S' = 'N'): LatLng {
+  const eccPrimeSquared = ECC_SQUARED / (1 - ECC_SQUARED);
+  const x = easting - 500000.0;
+  const y = hemisphere === 'S' ? northing - 10000000.0 : northing;
+  const M = y / K0;
+  const mu = M / (WGS84_A * (1 - ECC_SQUARED / 4 - (3 * ECC_SQUARED ** 2) / 64 - (5 * ECC_SQUARED ** 3) / 256));
+  const e1 = (1 - Math.sqrt(1 - ECC_SQUARED)) / (1 + Math.sqrt(1 - ECC_SQUARED));
+  const phi1 = mu + ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    (151 * e1 ** 3) / 96 * Math.sin(6 * mu) + (1097 * e1 ** 4) / 512 * Math.sin(8 * mu);
+  const sinPhi = Math.sin(phi1);
+  const cosPhi = Math.cos(phi1);
+  const tanPhi = Math.tan(phi1);
+  const N1 = WGS84_A / Math.sqrt(1 - ECC_SQUARED * sinPhi * sinPhi);
+  const R1 = (WGS84_A * (1 - ECC_SQUARED)) / Math.pow(1 - ECC_SQUARED * sinPhi * sinPhi, 1.5);
+  const T1 = tanPhi * tanPhi;
+  const C1 = eccPrimeSquared * cosPhi * cosPhi;
+  const D = x / (N1 * K0);
+  const lat = phi1 - (N1 * tanPhi) / R1 * (D * D / 2 -
+    (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * eccPrimeSquared) * D ** 4 / 24 +
+    (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * eccPrimeSquared - 3 * C1 * C1) * D ** 6 / 720);
+  const lonOrigin = (zoneNumber - 1) * 6 - 180 + 3;
+  const lon = (lonOrigin * Math.PI) / 180 + (D - (1 + 2 * T1 + C1) * D ** 3 / 6 +
+    (5 - 2 * C1 + 28 * T1 - 3 * C1 ** 2 + 8 * eccPrimeSquared + 24 * T1 ** 2) * D ** 5 / 120) / cosPhi;
+  return [(lat * 180) / Math.PI, (lon * 180) / Math.PI];
+}
+
 // Haversine distance in meters
 export function haversineDistance(a: LatLng, b: LatLng): number {
   const R = 6371000;

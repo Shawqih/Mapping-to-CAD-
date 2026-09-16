@@ -2,7 +2,7 @@ export type LatLng = [number, number]; // [lat, lon]
 
 export type FeatureType = 'point' | 'line' | 'polygon' | 'building';
 
-export type FeatureSource = 'manual' | 'osm';
+export type FeatureSource = 'manual' | 'osm' | 'imported';
 
 export interface GeoFeature {
   id: string;
@@ -16,6 +16,11 @@ export interface GeoFeature {
   notes?: string;
   osmTags?: Record<string, string>;
   osmId?: string;
+  pointNumber?: string;
+  pointCode?: string;
+  elevation?: number;
+  easting?: number;
+  northing?: number;
 }
 
 export interface Project {

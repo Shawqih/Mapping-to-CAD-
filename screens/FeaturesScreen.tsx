@@ -10,6 +10,7 @@ import { formatArea, formatDistance, pathLength, polygonAreaSqMeters } from '../
 import EmptyState from '../components/EmptyState';
 import { focusOnMap } from '../lib/mapBus';
 import DeveloperFooter from '../components/DeveloperFooter';
+import ImportDataModal from '../components/ImportDataModal';
 
 const TYPE_META: Record<FeatureType, { icon: keyof typeof Ionicons.glyphMap; label: string }> = {
   point: { icon: 'location', label: 'نقاط' },
@@ -18,16 +19,17 @@ const TYPE_META: Record<FeatureType, { icon: keyof typeof Ionicons.glyphMap; lab
   polygon: { icon: 'shapes', label: 'مضلعات' },
 };
 
-type FilterType = 'all' | FeatureType | 'osm' | 'manual';
+type FilterType = 'all' | FeatureType | 'osm' | 'manual' | 'imported';
 
 export default function FeaturesScreen() {
   const { palette } = useTheme();
-  const { activeProject, removeFeature, updateFeature, clearOSMFeatures } = useProjects();
+  const { activeProject, removeFeature, updateFeature, clearOSMFeatures, addFeatures } = useProjects();
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>('all');
   const [selected, setSelected] = useState<GeoFeature | null>(null);
   const [editName, setEditName] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [importVisible, setImportVisible] = useState(false);
 
   const features = activeProject?.features ?? [];
 
@@ -35,6 +37,7 @@ export default function FeaturesScreen() {
     if (filter === 'all') return features;
     if (filter === 'osm') return features.filter((f) => f.source === 'osm');
     if (filter === 'manual') return features.filter((f) => f.source === 'manual');
+    if (filter === 'imported') return features.filter((f) => f.source === 'imported');
     return features.filter((f) => f.type === filter);
   }, [features, filter]);
 
@@ -75,6 +78,12 @@ export default function FeaturesScreen() {
     focusOnMap(f.coords);
   };
 
+  const handleImported = (imported: GeoFeature[], coords: [number, number][], kind: string) => {
+    addFeatures(imported);
+    if (coords.length) focusOnMap(coords);
+    Alert.alert('تم الاستيراد', `تم استيراد ${imported.length} عنصر من ${kind.toUpperCase()} وعرضه على الخريطة.`);
+  };
+
   const measurement = (f: GeoFeature | null) => {
     if (!f) return null;
     if (f.type === 'line') return formatDistance(pathLength(f.coords));
@@ -98,12 +107,17 @@ export default function FeaturesScreen() {
             {item.name}
           </Text>
           <Text style={{ color: palette.textMuted, fontSize: 12, marginTop: 2, textAlign: 'right' }}>
-            {item.category} {m ? `· ${m}` : ''}
+            {item.category} {item.pointCode ? `· الرمز: ${item.pointCode}` : ''} {item.elevation !== undefined ? `· المنسوب: ${item.elevation}` : ''} {m ? `· ${m}` : ''}
           </Text>
         </View>
         {item.source === 'osm' && (
           <View style={[styles.osmTag, { backgroundColor: palette.primary + '20' }]}>
             <Text style={{ color: palette.primary, fontSize: 10, fontWeight: '700' }}>OSM</Text>
+          </View>
+        )}
+        {item.source === 'imported' && (
+          <View style={[styles.osmTag, { backgroundColor: '#2563EB20' }]}>
+            <Text style={{ color: '#2563EB', fontSize: 10, fontWeight: '700' }}>مستورد</Text>
           </View>
         )}
         <Ionicons name="chevron-back" size={16} color={palette.textMuted} />
@@ -114,6 +128,10 @@ export default function FeaturesScreen() {
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: palette.bg }]} edges={['top']}>
       <View style={styles.header}>
+        <Pressable onPress={() => setImportVisible(true)} style={[styles.importHeaderButton, { backgroundColor: palette.primary }]}>
+          <Ionicons name="download-outline" size={17} color="#fff" />
+          <Text style={styles.importHeaderText}>استيراد</Text>
+        </Pressable>
         <Text style={[styles.headerTitle, { color: palette.text }]}>عناصر المشروع</Text>
         <Text style={{ color: palette.textMuted, fontSize: 12 }}>
           {activeProject?.name} · {features.length} عنصر إجمالي
@@ -139,6 +157,7 @@ export default function FeaturesScreen() {
             { key: 'polygon', label: 'مضلعات' },
             { key: 'osm', label: 'من OSM' },
             { key: 'manual', label: 'يدوي' },
+            { key: 'imported', label: 'مستورد' },
           ] as { key: FilterType; label: string }[]
         ).map((opt) => (
           <Pressable
@@ -186,6 +205,8 @@ export default function FeaturesScreen() {
       )}
 
       <DeveloperFooter />
+
+      <ImportDataModal visible={importVisible} onClose={() => setImportVisible(false)} onImported={handleImported} />
 
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={[styles.backdrop, { backgroundColor: palette.overlay }]}>
@@ -267,6 +288,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 8, alignItems: 'flex-end' },
   headerTitle: { fontSize: 22, fontWeight: '800' },
+  importHeaderButton: { position: 'absolute', left: 20, top: 8, zIndex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8 },
+  importHeaderText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   statsRow: { flexDirection: 'row-reverse', paddingHorizontal: 20, gap: 8, marginTop: 12 },
   statChip: { flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   filterRow: { marginTop: 14, paddingHorizontal: 20, flexDirection: 'row-reverse', flexGrow: 0 },

@@ -1,9 +1,13 @@
-import { BASE_LAYERS, SATELLITE_LABELS_OVERLAY } from './mapLayers';
+import { BASE_LAYERS, SATELLITE_LABELS_OVERLAY } from "./mapLayers";
 
 // Builds a fully self-contained HTML document embedding Leaflet + all free
 // base layers + a small messaging protocol used to talk to React Native
 // (native via WebView postMessage, web via window.postMessage/iframe).
-export function buildMapHtml(centerLat: number, centerLon: number, zoom: number): string {
+export function buildMapHtml(
+  centerLat: number,
+  centerLon: number,
+  zoom: number,
+): string {
   const layersJSON = JSON.stringify(BASE_LAYERS);
   const labelsJSON = JSON.stringify(SATELLITE_LABELS_OVERLAY);
 
@@ -88,7 +92,9 @@ export function buildMapHtml(centerLat: number, centerLon: number, zoom: number)
       } else {
         layer = L.polygon(f.coords, st);
       }
-      layer.bindTooltip(f.name, { className: 'gs-tooltip', direction: 'top', sticky: true });
+      var pointDetails = f.pointCode ? ' · الرمز: ' + f.pointCode : '';
+      var elevationDetails = (f.elevation !== undefined && f.elevation !== null) ? ' · المنسوب: ' + f.elevation : '';
+      layer.bindTooltip(f.name + pointDetails + elevationDetails, { className: 'gs-tooltip', direction: 'top', sticky: true });
       layer.addTo(featureLayerGroup);
     });
   }
