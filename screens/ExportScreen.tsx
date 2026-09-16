@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { useProjects } from '../context/ProjectsContext';
 import { generateDXF } from '../lib/dxfWriter';
+import { generateKML, generateShapefileZip } from '../lib/exportFormats';
 import EmptyState from '../components/EmptyState';
 import { FeatureType } from '../types';
 import DeveloperFooter from '../components/DeveloperFooter';
@@ -146,6 +147,41 @@ export default function ExportScreen() {
     }
   };
 
+  const downloadTextOrShare = async (content: string, fileName: string, mimeType: string) => {
+    if (Platform.OS === 'web') {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return;
+    }
+    const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(fileUri, content, { encoding: FileSystem.EncodingType.UTF8 });
+    if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType, dialogTitle: `مشاركة ${fileName}` });
+    else Alert.alert('تم الحفظ', `تم حفظ الملف في:\n${fileUri}`);
+  };
+
+  const exportKML = async () => {
+    if (!activeProject || !filteredFeatures.length) { Alert.alert('لا توجد عناصر', 'اختر نوعاً واحداً على الأقل يحتوي على عناصر للتصدير.'); return; }
+    try { await downloadTextOrShare(generateKML(activeProject, filteredFeatures), `${sanitizeFileName(activeProject.name)}_${Date.now()}.kml`, 'application/vnd.google-earth.kml+xml'); }
+    catch (e: any) { Alert.alert('فشل التصدير', e?.message ?? 'تعذر إنشاء ملف KML.'); }
+  };
+
+  const exportShapefile = async () => {
+    if (!activeProject || !filteredFeatures.length) { Alert.alert('لا توجد عناصر', 'اختر نوعاً واحداً على الأقل يحتوي على عناصر للتصدير.'); return; }
+    try {
+      const base64 = await generateShapefileZip(activeProject, filteredFeatures);
+      const fileName = `${sanitizeFileName(activeProject.name)}_${Date.now()}_shapefile.zip`;
+      if (Platform.OS === 'web') {
+        const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)); const blob = new Blob([binary], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } else {
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(fileUri, { mimeType: 'application/zip', dialogTitle: 'مشاركة Shapefile ZIP' });
+        else Alert.alert('تم الحفظ', `تم حفظ الملف في:\n${fileUri}`);
+      }
+    } catch (e: any) { Alert.alert('فشل التصدير', e?.message ?? 'تعذر إنشاء Shapefile ZIP.'); }
+  };
+
   if (!activeProject) return null;
 
   return (
@@ -216,6 +252,16 @@ export default function ExportScreen() {
             <Pressable onPress={exportGeoJSON} style={[styles.exportBtnOutline, { borderColor: palette.border }]}>
               <Ionicons name="code-download-outline" size={18} color={palette.text} />
               <Text style={{ color: palette.text, fontWeight: '700', marginRight: 8 }}>تصدير كـ GeoJSON (إضافي)</Text>
+            </Pressable>
+
+            <Pressable onPress={exportKML} style={[styles.exportBtnOutline, { borderColor: palette.border }]}>
+              <Ionicons name="globe-outline" size={18} color={palette.text} />
+              <Text style={{ color: palette.text, fontWeight: '700', marginRight: 8 }}>تصدير كـ KML</Text>
+            </Pressable>
+
+            <Pressable onPress={exportShapefile} style={[styles.exportBtnOutline, { borderColor: palette.primary }]}>
+              <Ionicons name="archive-outline" size={18} color={palette.primary} />
+              <Text style={{ color: palette.primary, fontWeight: '800', marginRight: 8 }}>تصدير Shapefile ZIP</Text>
             </Pressable>
 
             {lastResult && (

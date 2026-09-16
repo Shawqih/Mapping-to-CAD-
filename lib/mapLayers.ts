@@ -65,7 +65,7 @@ export const BASE_LAYERS: BaseLayer[] = [
     category: 'satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '© Esri, Maxar, Earthstar Geographics',
-    maxZoom: 19,
+    maxZoom: 23,
     preview: '#3a4a3a',
   },
   {
