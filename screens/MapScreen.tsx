@@ -17,6 +17,7 @@ import LayerPickerModal from '../components/LayerPickerModal';
 import FeatureFormModal from '../components/FeatureFormModal';
 import ProjectSwitcherModal from '../components/ProjectSwitcherModal';
 import DeveloperFooter from '../components/DeveloperFooter';
+import BuildingModelModal from '../components/BuildingModelModal';
 import { useTheme } from '../context/ThemeContext';
 import { useProjects } from '../context/ProjectsContext';
 import { DrawMode, FeatureType, GeoFeature, MapBounds, WebToRNMessage } from '../types';
@@ -27,7 +28,7 @@ import { subscribeFocus } from '../lib/mapBus';
 
 export default function MapScreen() {
   const { palette } = useTheme();
-  const { activeProject, addFeature, addFeatures, updateProjectView } = useProjects();
+  const { activeProject, addFeature, addFeatures, updateFeature, updateProjectView } = useProjects();
   const mapRef = useRef<GeoMapHandle>(null);
 
   const [ready, setReady] = useState(false);
@@ -44,6 +45,8 @@ export default function MapScreen() {
   const [fetchingOSM, setFetchingOSM] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [modelModalVisible, setModelModalVisible] = useState(false);
+  const [regionFeatures, setRegionFeatures] = useState<GeoFeature[]>([]);
 
   const initialCenter = activeProject?.center ?? [24.7136, 46.6753];
   const initialZoom = activeProject?.zoom ?? 15;
@@ -94,6 +97,14 @@ export default function MapScreen() {
         case 'DRAW_COMPLETE': {
           const coords = msg.payload.coords as [number, number][];
           const mode = msg.payload.mode as DrawMode;
+          if (mode === 'rectangle') {
+            const latitudes = coords.map((p) => p[0]);
+            const longitudes = coords.map((p) => p[1]);
+            const selectedBounds: MapBounds = { north: Math.max(...latitudes), south: Math.min(...latitudes), east: Math.max(...longitudes), west: Math.min(...longitudes) };
+            fetchRegionAndPrepareModel(selectedBounds);
+            setDrawMode('none'); setDrawCount(0);
+            break;
+          }
           const type: FeatureType = mode === 'point' ? 'point' : mode === 'polygon' ? 'polygon' : 'line';
           setPendingFeature({ type, coords });
           setDrawMode('none');
@@ -198,6 +209,25 @@ export default function MapScreen() {
     }
   };
 
+  const fetchRegionAndPrepareModel = async (selectedBounds: MapBounds) => {
+    try {
+      setFetchingOSM(true);
+      const result = await fetchOSMFeatures(selectedBounds);
+      setRegionFeatures(result.features);
+      addFeatures(result.features);
+      setModelModalVisible(true);
+      showToast(`تم جلب ${result.features.length} عنصراً من المنطقة المحددة`);
+    } catch (e: any) {
+      Alert.alert('تعذر جلب المنطقة', e?.message ?? 'تحقق من اتصال الإنترنت ثم حاول مرة أخرى.');
+    } finally { setFetchingOSM(false); }
+  };
+
+  const create3DModel = (height: number) => {
+    regionFeatures.filter((f) => f.type === 'building').forEach((f) => updateFeature(f.id, { elevation: height, model3d: true, fillOpacity: 0.38 }));
+    setModelModalVisible(false);
+    showToast(`تم إنشاء نموذج ثلاثي الأبعاد لـ ${regionFeatures.filter((f) => f.type === 'building').length} مبنى`);
+  };
+
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: palette.bg }]} edges={['top']}>
       <View style={styles.flex}>
@@ -296,6 +326,7 @@ export default function MapScreen() {
                   onPress={fetchBuildings}
                   loading={fetchingOSM}
                 />
+                <SpeedOption icon="cube-outline" label="تحديد منطقة / نموذج 3D" color="#9333EA" onPress={() => startDraw('rectangle')} />
               </View>
             )}
             <FAB
@@ -324,6 +355,7 @@ export default function MapScreen() {
           onCancel={() => setPendingFeature(null)}
           onSave={saveFeature}
         />
+        <BuildingModelModal visible={modelModalVisible} onClose={() => setModelModalVisible(false)} onCreate={create3DModel} />
       </View>
     </SafeAreaView>
   );

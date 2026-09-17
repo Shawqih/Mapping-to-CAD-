@@ -21,6 +21,9 @@ export interface GeoFeature {
   elevation?: number;
   easting?: number;
   northing?: number;
+  fillOpacity?: number;
+  lineWidth?: number;
+  model3d?: boolean;
 }
 
 export interface Project {
@@ -45,7 +48,7 @@ export interface BaseLayer {
   preview: string; // color swatch fallback
 }
 
-export type DrawMode = 'none' | 'point' | 'line' | 'polygon';
+export type DrawMode = 'none' | 'point' | 'line' | 'polygon' | 'rectangle';
 
 export interface MapBounds {
   north: number;

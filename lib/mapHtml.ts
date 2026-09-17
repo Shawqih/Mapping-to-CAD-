@@ -73,8 +73,8 @@ export function buildMapHtml(
 
   function styleFor(f){
     var color = f.color || '#0E7C66';
-    return { color: color, weight: f.type === 'point' ? 2 : 2.5, fillColor: color,
-      fillOpacity: f.type === 'polygon' || f.type === 'building' ? 0.22 : 0.9,
+    return { color: color, weight: f.lineWidth || (f.type === 'point' ? 2 : 2.5), fillColor: color,
+      fillOpacity: f.fillOpacity ?? (f.type === 'polygon' || f.type === 'building' ? 0.22 : 0.9),
       dashArray: f.source === 'osm' ? '4,3' : null };
   }
 
@@ -91,6 +91,15 @@ export function buildMapHtml(
         layer = L.polyline(f.coords, st);
       } else {
         layer = L.polygon(f.coords, st);
+        if (f.model3d && f.elevation) {
+          var lift = Math.min(0.0008, Math.max(0.00008, f.elevation / 100000));
+          var roof = f.coords.map(function(p){ return [p[0] + lift, p[1] - lift]; });
+          L.polygon(roof, { color: st.color, weight: 1, fillColor: st.color, fillOpacity: 0.4 }).addTo(featureLayerGroup);
+          for (var wi = 0; wi < f.coords.length; wi++) {
+            var next = f.coords[(wi + 1) % f.coords.length];
+            L.polygon([f.coords[wi], next, roof[(wi + 1) % roof.length], roof[wi]], { color: st.color, weight: 1, fillColor: st.color, fillOpacity: 0.32 }).addTo(featureLayerGroup);
+          }
+        }
       }
       var pointDetails = f.pointCode ? ' · الرمز: ' + f.pointCode : '';
       var elevationDetails = (f.elevation !== undefined && f.elevation !== null) ? ' · المنسوب: ' + f.elevation : '';
@@ -108,6 +117,8 @@ export function buildMapHtml(
     if (drawPoints.length > 1) {
       if (drawMode === 'polygon') {
         L.polygon(drawPoints, { color: '#F59E0B', weight: 2, dashArray: '6,4', fillOpacity: 0.15 }).addTo(drawLayerGroup);
+      } else if (drawMode === 'rectangle' && drawPoints.length === 2) {
+        L.rectangle([drawPoints[0], drawPoints[1]], { color: '#2563EB', weight: 2, dashArray: '6,4', fillOpacity: 0.12 }).addTo(drawLayerGroup);
       } else {
         L.polyline(drawPoints, { color: '#F59E0B', weight: 3, dashArray: '6,4' }).addTo(drawLayerGroup);
       }
@@ -155,7 +166,7 @@ export function buildMapHtml(
         break;
       }
       case 'FINISH_DRAWING': {
-        if (drawPoints.length >= (drawMode === 'polygon' ? 3 : 2)) {
+      if (drawPoints.length >= (drawMode === 'polygon' ? 3 : 2)) {
           sendToRN({ type: 'DRAW_COMPLETE', payload: { coords: drawPoints.slice(), mode: drawMode } });
         }
         drawPoints = [];
@@ -202,7 +213,7 @@ export function buildMapHtml(
   map.on('click', function(e){
     if (drawMode === 'point') {
       sendToRN({ type: 'DRAW_COMPLETE', payload: { coords: [[e.latlng.lat, e.latlng.lng]], mode: 'point' } });
-    } else if (drawMode === 'line' || drawMode === 'polygon') {
+      } else if (drawMode === 'line' || drawMode === 'polygon' || drawMode === 'rectangle') {
       drawPoints.push([e.latlng.lat, e.latlng.lng]);
       redrawTemp();
       sendToRN({ type: 'DRAW_UPDATE', payload: { count: drawPoints.length } });

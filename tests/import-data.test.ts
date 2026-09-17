@@ -55,4 +55,19 @@ describe("survey data import", () => {
     expect(result.features[0].elevation).toBe(99);
     expect(result.coords[0]).toEqual([24.7136, 46.6753]);
   });
+
+  it("imports KML polygons and preserves style and description", () => {
+    const result = parseImportedFile(
+      {
+        name: "area.kml",
+        text: `<kml><Document><Placemark><name>منطقة اختبار</name><description>حدود المشروع</description><Style><PolyStyle><color>80112233</color></PolyStyle></Style><Polygon><outerBoundaryIs><LinearRing><coordinates>46.67,24.71 46.68,24.71 46.68,24.72 46.67,24.71</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>`,
+      },
+      { utmZone: 38, hemisphere: "N" },
+    );
+    expect(result.features[0].type).toBe("polygon");
+    expect(result.features[0].name).toBe("منطقة اختبار");
+    expect(result.features[0].notes).toBe("حدود المشروع");
+    expect(result.features[0].color).toBe("#332211");
+    expect(result.features[0].fillOpacity).toBeGreaterThan(0.4);
+  });
 });

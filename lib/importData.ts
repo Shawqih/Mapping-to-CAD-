@@ -28,7 +28,18 @@ function finite(value: unknown): number | null {
 }
 
 function text(value: unknown): string {
-  return String(value ?? "").trim();
+  return String(value ?? '').trim();
+}
+
+function decodeXml(value: string): string {
+  return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
+function kmlColorToHex(value: string): { color?: string; fillOpacity?: number } {
+  const raw = value.trim().replace(/^#/, '');
+  if (!/^[0-9a-f]{8}$/i.test(raw)) return {};
+  const alpha = parseInt(raw.slice(0, 2), 16) / 255;
+  return { color: `#${raw.slice(6, 8)}${raw.slice(4, 6)}${raw.slice(2, 4)}`, fillOpacity: Math.max(0.08, Math.min(1, alpha)) };
 }
 
 function makePointFeature(
@@ -161,9 +172,13 @@ function featuresFromKml(textContent: string): GeoFeature[] {
     textContent,
   ];
   placemarks.forEach((placemark, index) => {
-    const name =
+    const name = decodeXml(
       placemark.match(/<name[^>]*>([\s\S]*?)<\/name>/i)?.[1]?.trim() ??
-      `KML ${index + 1}`;
+      `KML ${index + 1}`,
+    );
+    const description = decodeXml(placemark.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ?? '');
+    const styleColor = placemark.match(/<(?:color|PolyStyle>\s*<color)[^>]*>([0-9a-f]{8})<\/[^>]*color>/i)?.[1] ?? '';
+    const style = kmlColorToHex(styleColor);
     const raw =
       placemark.match(/<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i)?.[1] ??
       "";
@@ -178,13 +193,13 @@ function featuresFromKml(textContent: string): GeoFeature[] {
       });
     if (!coords.length) return;
     const type =
-      coords.length > 2 && /Polygon/i.test(placemark)
-        ? "polygon"
-        : coords.length > 1
-          ? "line"
-          : "point";
+      /<Polygon\b/i.test(placemark)
+        ? 'polygon'
+        : /<(?:LineString|Track|MultiGeometry)\b/i.test(placemark) || coords.length > 1
+          ? 'line'
+          : 'point';
     features.push({
-      ...makePointFeature(coords[0], name, ""),
+      ...makePointFeature(coords[0], name, '', undefined, { notes: description || undefined, ...style }),
       type,
       coords,
       category: `مستورد ${type}`,
