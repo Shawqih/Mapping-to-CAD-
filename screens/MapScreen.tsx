@@ -22,7 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useProjects } from '../context/ProjectsContext';
 import { DrawMode, FeatureType, GeoFeature, MapBounds, WebToRNMessage } from '../types';
 import { fetchOSMFeatures, MIN_ZOOM_FOR_FETCH } from '../lib/overpass';
-import { uid } from '../lib/geo';
+import { uid, formatDistance, formatArea, pathLength, polygonAreaSqMeters } from '../lib/geo';
 import { loadLastLayer, saveLastLayer } from '../lib/storage';
 import { subscribeFocus } from '../lib/mapBus';
 
@@ -97,6 +97,12 @@ export default function MapScreen() {
         case 'DRAW_COMPLETE': {
           const coords = msg.payload.coords as [number, number][];
           const mode = msg.payload.mode as DrawMode;
+          if (mode === 'measure-line' || mode === 'measure-area') {
+            const value = mode === 'measure-line' ? formatDistance(pathLength(coords)) : formatArea(polygonAreaSqMeters(coords));
+            Alert.alert(mode === 'measure-line' ? 'قياس المسافة' : 'قياس المساحة', value);
+            setDrawMode('none'); setDrawCount(0);
+            break;
+          }
           if (mode === 'rectangle') {
             const latitudes = coords.map((p) => p[0]);
             const longitudes = coords.map((p) => p[1]);
@@ -158,6 +164,8 @@ export default function MapScreen() {
       color,
       createdAt: Date.now(),
       notes: notes || undefined,
+      layerId: `manual-${pendingFeature.type}`,
+      visible: true,
     };
     addFeature(feature);
     setPendingFeature(null);
@@ -289,7 +297,7 @@ export default function MapScreen() {
         {drawMode !== 'none' ? (
           <View style={[styles.drawBar, { backgroundColor: palette.bgElevated, borderColor: palette.border }]}>
             <Text style={[styles.drawText, { color: palette.text }]}>
-              {drawMode === 'point' ? 'انقر على الخريطة لتحديد نقطة' : `تم إضافة ${drawCount} نقطة`}
+              {drawMode === 'point' ? 'انقر على الخريطة لتحديد نقطة' : drawMode === 'measure-line' ? `قياس مسافة: ${drawCount} نقطة` : drawMode === 'measure-area' ? `قياس مساحة: ${drawCount} نقطة` : `تم إضافة ${drawCount} نقطة`}
             </Text>
             <View style={styles.drawActions}>
               <Pressable onPress={cancelDraw} style={[styles.drawBtn, { backgroundColor: palette.card }]}>
@@ -303,8 +311,8 @@ export default function MapScreen() {
               {drawMode !== 'point' && (
                 <Pressable
                   onPress={finishDraw}
-                  disabled={drawCount < (drawMode === 'polygon' ? 3 : 2)}
-                  style={[styles.drawBtnWide, { backgroundColor: palette.primary, opacity: drawCount < (drawMode === 'polygon' ? 3 : 2) ? 0.5 : 1 }]}
+                  disabled={drawCount < ((drawMode === 'polygon' || drawMode === 'measure-area') ? 3 : 2)}
+                  style={[styles.drawBtnWide, { backgroundColor: palette.primary, opacity: drawCount < ((drawMode === 'polygon' || drawMode === 'measure-area') ? 3 : 2) ? 0.5 : 1 }]}
                 >
                   <Ionicons name="checkmark" size={18} color="#fff" />
                   <Text style={styles.finishText}>إنهاء</Text>
@@ -327,6 +335,8 @@ export default function MapScreen() {
                   loading={fetchingOSM}
                 />
                 <SpeedOption icon="cube-outline" label="تحديد منطقة / نموذج 3D" color="#9333EA" onPress={() => startDraw('rectangle')} />
+                <SpeedOption icon="resize-outline" label="قياس مسافة" color="#D97706" onPress={() => startDraw('measure-line')} />
+                <SpeedOption icon="scan-outline" label="قياس مساحة" color="#DC2626" onPress={() => startDraw('measure-area')} />
               </View>
             )}
             <FAB

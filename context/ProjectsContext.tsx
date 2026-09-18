@@ -20,6 +20,7 @@ interface ProjectsContextValue {
   addFeature: (feature: GeoFeature) => void;
   addFeatures: (features: GeoFeature[]) => void;
   updateFeature: (id: string, patch: Partial<GeoFeature>) => void;
+  updateFeatures: (ids: string[], patch: Partial<GeoFeature>) => void;
   removeFeature: (id: string) => void;
   clearOSMFeatures: () => void;
   updateProjectView: (center: [number, number], zoom: number) => void;
@@ -145,6 +146,14 @@ export const ProjectsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [mutateActive]
   );
 
+  const updateFeatures = useCallback(
+    (ids: string[], patch: Partial<GeoFeature>) => {
+      const selected = new Set(ids);
+      mutateActive((p) => ({ ...p, features: p.features.map((f) => selected.has(f.id) ? { ...f, ...patch } : f) }));
+    },
+    [mutateActive]
+  );
+
   const removeFeature = useCallback(
     (id: string) => {
       mutateActive((p) => ({ ...p, features: p.features.filter((f) => f.id !== id) }));
@@ -180,6 +189,7 @@ export const ProjectsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addFeature,
     addFeatures,
     updateFeature,
+    updateFeatures,
     removeFeature,
     clearOSMFeatures,
     updateProjectView,

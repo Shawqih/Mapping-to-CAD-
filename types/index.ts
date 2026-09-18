@@ -24,6 +24,8 @@ export interface GeoFeature {
   fillOpacity?: number;
   lineWidth?: number;
   model3d?: boolean;
+  layerId?: string;
+  visible?: boolean;
 }
 
 export interface Project {
@@ -48,7 +50,7 @@ export interface BaseLayer {
   preview: string; // color swatch fallback
 }
 
-export type DrawMode = 'none' | 'point' | 'line' | 'polygon' | 'rectangle';
+export type DrawMode = 'none' | 'point' | 'line' | 'polygon' | 'rectangle' | 'measure-line' | 'measure-area';
 
 export interface MapBounds {
   north: number;

@@ -80,7 +80,7 @@ export function buildMapHtml(
 
   function renderFeatures(features){
     featureLayerGroup.clearLayers();
-    (features || []).forEach(function(f){
+    (features || []).filter(function(f){ return f.visible !== false; }).forEach(function(f){
       var st = styleFor(f);
       var layer;
       if (f.type === 'point') {
@@ -115,7 +115,7 @@ export function buildMapHtml(
       L.circleMarker(p, { radius: 5, color: '#0E7C66', weight: 2, fillColor: '#ffffff', fillOpacity: 1 }).addTo(drawLayerGroup);
     });
     if (drawPoints.length > 1) {
-      if (drawMode === 'polygon') {
+      if (drawMode === 'polygon' || drawMode === 'measure-area') {
         L.polygon(drawPoints, { color: '#F59E0B', weight: 2, dashArray: '6,4', fillOpacity: 0.15 }).addTo(drawLayerGroup);
       } else if (drawMode === 'rectangle' && drawPoints.length === 2) {
         L.rectangle([drawPoints[0], drawPoints[1]], { color: '#2563EB', weight: 2, dashArray: '6,4', fillOpacity: 0.12 }).addTo(drawLayerGroup);
@@ -166,7 +166,7 @@ export function buildMapHtml(
         break;
       }
       case 'FINISH_DRAWING': {
-      if (drawPoints.length >= (drawMode === 'polygon' ? 3 : 2)) {
+      if (drawPoints.length >= ((drawMode === 'polygon' || drawMode === 'measure-area') ? 3 : 2)) {
           sendToRN({ type: 'DRAW_COMPLETE', payload: { coords: drawPoints.slice(), mode: drawMode } });
         }
         drawPoints = [];
@@ -213,7 +213,7 @@ export function buildMapHtml(
   map.on('click', function(e){
     if (drawMode === 'point') {
       sendToRN({ type: 'DRAW_COMPLETE', payload: { coords: [[e.latlng.lat, e.latlng.lng]], mode: 'point' } });
-      } else if (drawMode === 'line' || drawMode === 'polygon' || drawMode === 'rectangle') {
+      } else if (drawMode === 'line' || drawMode === 'polygon' || drawMode === 'rectangle' || drawMode === 'measure-line' || drawMode === 'measure-area') {
       drawPoints.push([e.latlng.lat, e.latlng.lng]);
       redrawTemp();
       sendToRN({ type: 'DRAW_UPDATE', payload: { count: drawPoints.length } });

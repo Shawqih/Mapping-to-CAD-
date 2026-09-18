@@ -21,6 +21,7 @@ const LAYER_TABLE: Record<string, LayerDef> = {
   ROADS: { name: 'ROADS', color: 2 }, // yellow
   POI: { name: 'POI', color: 3 }, // green
   BOUNDARY: { name: 'BOUNDARY', color: 6 }, // magenta
+  BUILDINGS_3D: { name: 'BUILDINGS_3D', color: 30 }, // orange
   LABELS: { name: 'LABELS', color: 7 }, // white/black
   METADATA: { name: 'METADATA', color: 8 }, // grey
 };
@@ -106,12 +107,41 @@ function polylineEntity(layer: string, pts: { x: number; y: number }[], closed: 
   return s;
 }
 
+function face3DEntity(layer: string, pts: { x: number; y: number; z: number }[]): string {
+  if (pts.length < 3) return '';
+  const corners = pts.slice(0, 4);
+  while (corners.length < 4) corners.push(corners[corners.length - 1]);
+  let s = '0\n3DFACE\n' + dxfPair(8, layer);
+  corners.forEach((p, i) => {
+    const code = i === 0 ? 10 : i === 1 ? 11 : i === 2 ? 12 : 13;
+    s += dxfPair(code, p.x.toFixed(4)) + dxfPair(code + 10, p.y.toFixed(4)) + dxfPair(code + 20, p.z.toFixed(3));
+  });
+  return s;
+}
+
 export interface DXFGenerationResult {
   dxf: string;
   zoneNumber: number;
   hemisphere: 'N' | 'S';
   featureCount: number;
   pointRadius: number;
+}
+
+export function generate3DDXF(project: Project, features: GeoFeature[]): DXFGenerationResult {
+  const result = generateDXF(project, features);
+  const modelFeatures = features.filter((f) => f.type === 'building' && f.model3d && (f.elevation ?? 0) > 0);
+  if (!modelFeatures.length) return result;
+  const origin = modelFeatures.flatMap((f) => f.coords)[0] ?? project.center;
+  const zoneNumber = Math.floor((origin[1] + 180) / 6) + 1;
+  let faces = '';
+  for (const feature of modelFeatures) {
+    const roof = feature.coords.map((c) => { const u = latLonToUTM(c[0], c[1], zoneNumber); return { x: u.easting, y: u.northing, z: feature.elevation ?? 0 }; });
+    const base = roof.map((p) => ({ ...p, z: 0 }));
+    faces += face3DEntity('BUILDINGS_3D', base.slice(0, 4));
+    faces += face3DEntity('BUILDINGS_3D', roof.slice(0, 4));
+    for (let i = 0; i < roof.length; i++) faces += face3DEntity('BUILDINGS_3D', [base[i], base[(i + 1) % base.length], roof[(i + 1) % roof.length], roof[i]]);
+  }
+  return { ...result, dxf: result.dxf.replace('0\nENDSEC\n0\nEOF\n', `${faces}0\nENDSEC\n0\nEOF\n`), featureCount: modelFeatures.length };
 }
 
 export function generateDXF(project: Project, features: GeoFeature[]): DXFGenerationResult {
@@ -139,7 +169,7 @@ export function generateDXF(project: Project, features: GeoFeature[]): DXFGenera
   const pointRadius = Math.max(0.15, span * 0.0025);
   const textHeight = Math.max(0.3, span * 0.004);
 
-  const usedLayers = new Set<string>(['LABELS', 'METADATA']);
+  const usedLayers = new Set<string>(['LABELS', 'METADATA', 'BUILDINGS_3D']);
   let entities = '0\nSECTION\n2\nENTITIES\n';
 
   for (const { feature, pts } of projected) {

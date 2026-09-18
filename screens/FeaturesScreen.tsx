@@ -23,7 +23,7 @@ type FilterType = 'all' | FeatureType | 'osm' | 'manual' | 'imported';
 
 export default function FeaturesScreen() {
   const { palette } = useTheme();
-  const { activeProject, removeFeature, updateFeature, clearOSMFeatures, addFeatures } = useProjects();
+  const { activeProject, removeFeature, updateFeature, updateFeatures, clearOSMFeatures, addFeatures } = useProjects();
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>('all');
   const [selected, setSelected] = useState<GeoFeature | null>(null);
@@ -45,6 +45,12 @@ export default function FeaturesScreen() {
     const byType: Record<string, number> = {};
     features.forEach((f) => (byType[f.type] = (byType[f.type] ?? 0) + 1));
     return byType;
+  }, [features]);
+
+  const layers = useMemo(() => {
+    const map = new Map<string, GeoFeature[]>();
+    features.forEach((f) => { const id = f.layerId ?? `${f.source}-${f.type}`; map.set(id, [...(map.get(id) ?? []), f]); });
+    return [...map.entries()].map(([id, items]) => ({ id, items, visible: items.some((f) => f.visible !== false) }));
   }, [features]);
 
   const openDetail = (f: GeoFeature) => {
@@ -79,7 +85,7 @@ export default function FeaturesScreen() {
   };
 
   const handleImported = (imported: GeoFeature[], coords: [number, number][], kind: string) => {
-    addFeatures(imported);
+    addFeatures(imported.map((f) => ({ ...f, layerId: f.layerId ?? `${kind}-${f.type}`, visible: true })));
     if (coords.length) focusOnMap(coords);
     Alert.alert('تم الاستيراد', `تم استيراد ${imported.length} عنصر من ${kind.toUpperCase()} وعرضه على الخريطة.`);
   };
@@ -188,6 +194,13 @@ export default function FeaturesScreen() {
         )}
       </ScrollView>
 
+      {layers.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.layerRow} contentContainerStyle={{ gap: 8 }}>
+        {layers.map((layer) => <Pressable key={layer.id} onPress={() => updateFeatures(layer.items.map((f) => f.id), { visible: !layer.visible })} style={[styles.layerChip, { borderColor: layer.visible ? palette.primary : palette.border, backgroundColor: layer.visible ? palette.primary + '18' : palette.card }]}>
+          <Ionicons name={layer.visible ? 'eye-outline' : 'eye-off-outline'} size={15} color={layer.visible ? palette.primary : palette.textMuted} />
+          <Text style={{ color: layer.visible ? palette.primary : palette.textMuted, fontSize: 11, fontWeight: '700' }}>{layer.id} ({layer.items.length})</Text>
+        </Pressable>)}
+      </ScrollView>}
+
       {filtered.length === 0 ? (
         <EmptyState
           icon="albums-outline"
@@ -293,6 +306,8 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row-reverse', paddingHorizontal: 20, gap: 8, marginTop: 12 },
   statChip: { flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   filterRow: { marginTop: 14, paddingHorizontal: 20, flexDirection: 'row-reverse', flexGrow: 0 },
+  layerRow: { marginTop: 8, paddingHorizontal: 20, flexGrow: 0 },
+  layerChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   listContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30 },
   card: {
