@@ -220,7 +220,7 @@ export default function MapScreen() {
   const fetchRegionAndPrepareModel = async (selectedBounds: MapBounds) => {
     try {
       setFetchingOSM(true);
-      const result = await fetchOSMFeatures(selectedBounds);
+      const result = await fetchOSMFeatures(selectedBounds, undefined, { buildingsOnly: true });
       setRegionFeatures(result.features);
       addFeatures(result.features);
       setModelModalVisible(true);
